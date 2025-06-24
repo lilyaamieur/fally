@@ -1,13 +1,15 @@
 import os
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import LabelEncoder
+import pickle
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import classification_report, accuracy_score
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # =========================
 # 1. CONFIG
@@ -15,166 +17,255 @@ import matplotlib.pyplot as plt
 BASE_DIR = "./data"
 FOLDERS = ["Healthy", "Light Damage", "Medium Damage", "Severe Damage"]
 CLASS_LABELS = ["Healthy", "Light", "Medium", "Severe"]
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-BATCH_SIZE = 16
-EPOCHS = 100
-LR = 1e-3
-WEIGHTS_PATH = "signal_classifier.pth" # Added for model weights
+
+# yeah yeah, Signal Processing is annoying, and we need to save both the model and scaler :/
+MODEL_PATH = "holes_ensemble_classifier.pkl"
+SCALER_PATH = "holes_scaler.pkl"
+
+TRAIN_ENSEMBLE = True
+ENSEMBLE_MODEL_TYPES = ['random_forest', 'svm', 'mlp']
 
 # =========================
 # 2. UTILS
 # =========================
 def read_signal_file(filepath):
-    df = pd.read_csv(filepath, sep="\t", encoding="latin1", names=["Frequency", "Magnitude", "Phase"], header=0)
-    return df["Magnitude"].values.astype(np.float32)
+    try:
+        df = pd.read_csv(filepath, sep="\t", encoding="latin1", names=["Frequency", "Magnitude", "Phase"], header=0)
+        magnitude = df["Magnitude"].values.astype(np.float32)
+
+        magnitude = magnitude[np.isfinite(magnitude)]
+
+        if len(magnitude) == 0:
+            raise ValueError("No valid magnitude data found")
+
+        return magnitude
+    except Exception as e:
+        print(f"Error reading {filepath}: {str(e)}")
+        return None
 
 # =========================
-# 3. DATASET
+# 3. DATA LOADING
 # =========================
-class SignalDataset(Dataset):
-    def __init__(self, base_dir, folders):
-        self.samples = []
-        self.labels = []
-        for label, folder in enumerate(folders):
-            folder_path = os.path.join(base_dir, folder)
-            for fname in os.listdir(folder_path):
-                if fname.endswith(".txt"):
-                    path = os.path.join(folder_path, fname)
-                    try:
-                        mag = read_signal_file(path)
-                        self.samples.append(mag)
-                        self.labels.append(label)
-                    except:
-                        continue
+def load_dataset(base_dir, folders):
+    samples = []
+    labels = []
+    min_length = float('inf')
 
-        self.samples = np.array(self.samples)
-        self.labels = np.array(self.labels)
+    print(f"Loading data from {base_dir}...")
 
-    def __len__(self):
-        return len(self.samples)
+    all_magnitudes = []
+    all_labels = []
 
-    def __getitem__(self, idx):
-        return self.samples[idx], self.labels[idx]
+    for label, folder in enumerate(tqdm(folders, desc="Loading folders")):
+        folder_path = os.path.join(base_dir, folder)
+        if not os.path.exists(folder_path):
+            print(f"Warning: Folder '{folder_path}' not found. Skipping.")
+            continue
+
+        for fname in os.listdir(folder_path):
+            if fname.endswith(".txt"):
+                path = os.path.join(folder_path, fname)
+                mag = read_signal_file(path)
+                if mag is not None:
+                    all_magnitudes.append(mag)
+                    all_labels.append(label)
+                    min_length = min(min_length, len(mag))
+
+    print(f"Truncating all signals to length: {min_length}")
+
+    for mag, label in zip(all_magnitudes, all_labels):
+        truncated_mag = mag[:min_length]
+        samples.append(truncated_mag)
+        labels.append(label)
+
+    X = np.array(samples)
+    y = np.array(labels)
+
+    print(f"Loaded {len(X)} samples across {len(folders)} categories.")
+    print(f"Signal length: {X.shape[1]}")
+
+    if len(X) == 0:
+        raise ValueError("No samples loaded. Check BASE_DIR and folder structure.")
+
+    return X, y
 
 # =========================
-# 4. MODEL
+# 4. MODEL CREATION
 # =========================
-class CNN1D(nn.Module):
-    def __init__(self, input_size, num_classes):
-        super(CNN1D, self).__init__()
-        self.conv_layers = nn.Sequential(
-            nn.Conv1d(1, 16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool1d(2),
-            nn.Conv1d(16, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool1d(2)
+def create_individual_model(model_type: str) -> object:
+    if model_type == 'random_forest':
+        return RandomForestClassifier(
+            n_estimators=100,
+            random_state=42,
+            n_jobs=-1,
+            max_depth=10
         )
-
-        # Calculate the flattened size dynamically
-        # Create a dummy input to pass through the conv layers
-        # The input shape is (batch_size, channels, length)
-        # Use 1 for batch_size as we only care about the feature dimension
-        with torch.no_grad():
-            dummy_input = torch.randn(1, 1, input_size)
-            flattened_size = self.conv_layers(dummy_input).view(1, -1).shape[1]
-
-        self.linear_layers = nn.Sequential(
-            nn.Flatten(), # Flatten here after the dummy pass
-            nn.Linear(flattened_size, 128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, num_classes)
+    elif model_type == 'svm':
+        return SVC(
+            kernel='rbf',
+            random_state=42,
+            probability=True,
+            C=1.0,
+            gamma='scale'
         )
-
-    def forward(self, x):
-        x = self.conv_layers(x)
-        x = self.linear_layers(x) # Flattening is now part of linear_layers
-        return x
+    elif model_type == 'mlp':
+        return MLPClassifier(
+            hidden_layer_sizes=(128, 64),
+            max_iter=500,
+            random_state=42,
+            early_stopping=True,
+            validation_fraction=0.1,
+            learning_rate_init=0.001
+        )
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
 
 # =========================
-# 5. TRAINING
+# 5. TRAINING SETUP
 # =========================
-all_data = SignalDataset(BASE_DIR, FOLDERS)
-input_size = all_data[0][0].shape[0]
+print("\nPreparing dataset...")
+X, y = load_dataset(BASE_DIR, FOLDERS)
+
+if len(X) == 0:
+    print("No data found or loaded. Please check BASE_DIR and folder contents.")
+    exit()
+
+input_size = X.shape[1]
+num_classes = len(FOLDERS)
+
+print(f"Dataset loaded. Total samples: {len(X)}")
+print(f"Input signal length: {input_size}")
+print(f"Number of output classes: {num_classes}")
 
 X_train, X_test, y_train, y_test = train_test_split(
-    all_data.samples, all_data.labels, test_size=0.2, random_state=42, stratify=all_data.labels
+    X, y, test_size=0.2, random_state=42, stratify=y
 )
 
-X_train = torch.tensor(X_train).unsqueeze(1).to(DEVICE)
-# Change y_train to torch.long
-y_train = torch.tensor(y_train).long().to(DEVICE)
-X_test = torch.tensor(X_test).unsqueeze(1).to(DEVICE)
-# Change y_test to torch.long
-y_test = torch.tensor(y_test).long().to(DEVICE)
+print("Scaling features...")
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-train_loader = DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
-test_loader = DataLoader(torch.utils.data.TensorDataset(X_test, y_test), batch_size=BATCH_SIZE)
-
-model = CNN1D(input_size, len(FOLDERS)).to(DEVICE)
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-
-# Load model weights if they exist
-if os.path.exists(WEIGHTS_PATH):
-    print(f"Loading model weights from {WEIGHTS_PATH}")
-    # Ensure map_location is set correctly for your device
-    model.load_state_dict(torch.load(WEIGHTS_PATH, map_location=DEVICE))
+if TRAIN_ENSEMBLE:
+    print(f"Creating ensemble models: {', '.join(ENSEMBLE_MODEL_TYPES)}...")
+    estimators = []
+    trained_models = {}
+    for model_type_name in ENSEMBLE_MODEL_TYPES:
+        estimator = create_individual_model(model_type_name)
+        estimators.append((model_type_name, estimator))
+        trained_models[model_type_name] = estimator
+    
+    model = VotingClassifier(
+        estimators=estimators, 
+        voting='soft',
+        n_jobs=-1
+    )
 else:
-    print("No pre-existing model weights found. Training from scratch.")
+    print("Training a single RandomForestClassifier...")
+    model = create_individual_model('random_forest')
+    trained_models = {'random_forest': model}
 
-for epoch in range(EPOCHS):
-    model.train()
-    total_loss = 0
-    for xb, yb in train_loader:
-        preds = model(xb)
-        loss = criterion(preds, yb)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-    print(f"Epoch {epoch+1}/{EPOCHS}, Loss: {total_loss/len(train_loader):.4f}")
 
-# =========================
-# 6. EVALUATION
-# =========================
-model.eval()
-y_true, y_pred = [], []
-with torch.no_grad():
-    for xb, yb in test_loader:
-        preds = model(xb)
-        pred_classes = preds.argmax(dim=1)
-        y_true.extend(yb.cpu().numpy())
-        y_pred.extend(pred_classes.cpu().numpy())
-
-print(classification_report(y_true, y_pred, target_names=CLASS_LABELS))
+if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
+    print(f"Loading pre-existing ensemble model from {MODEL_PATH}")
+    with open(MODEL_PATH, 'rb') as f:
+        loaded_ensemble_or_model = pickle.load(f)
+        if TRAIN_ENSEMBLE:
+            model = loaded_ensemble_or_model
+            for est_name, est_obj in model.estimators_:
+                if est_name in trained_models:
+                    trained_models[est_name] = est_obj
+        else:
+            model = loaded_ensemble_or_model
+            trained_models = {'random_forest': model}
+            
+    with open(SCALER_PATH, 'rb') as f:
+        scaler = pickle.load(f)
+    print("Model and scaler loaded successfully.")
+else:
+    print("No pre-existing model found. Training from scratch.")
 
 # =========================
-# 7. SAVE MODEL
+# 6. TRAINING
 # =========================
-print(f"Saving model weights to {WEIGHTS_PATH}")
-torch.save(model.state_dict(), WEIGHTS_PATH)
+print(f"\nStarting training...")
+if TRAIN_ENSEMBLE:
+    print("Training individual models for the ensemble...")
+    for name, estimator in tqdm(model.estimators, desc="Fitting individual estimators"):
+        print(f"  Fitting {name}...")
+        estimator.fit(X_train_scaled, y_train)
+    model.fit(X_train_scaled, y_train)
+else:
+    print(f"Training single model: {model.__class__.__name__}...")
+    model.fit(X_train_scaled, y_train)
+print("Training completed!")
 
 # =========================
-# 8. INFERENCE
+# 7. EVALUATION
 # =========================
-def predict_observation(file_path):
-    model.eval()
+print("\nEvaluating model performance...")
+y_pred = model.predict(X_test_scaled)
+accuracy = accuracy_score(y_test, y_pred)
+
+print(f"Test Accuracy: {accuracy:.4f}")
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=CLASS_LABELS))
+
+# =========================
+# 8. SAVE MODEL AND SCALER
+# =========================
+print(f"Saving model to {MODEL_PATH}")
+with open(MODEL_PATH, 'wb') as f:
+    pickle.dump(model, f)
+
+print(f"Saving scaler to {SCALER_PATH}")
+with open(SCALER_PATH, 'wb') as f:
+    pickle.dump(scaler, f)
+
+print("Model and scaler saved successfully!")
+
+# =========================
+# 9. INFERENCE
+# =========================
+def predict_observation(file_path, trained_model, trained_scaler, input_feature_size, class_labels):
     mag = read_signal_file(file_path)
-    mag = torch.tensor(mag).unsqueeze(0).unsqueeze(0).to(DEVICE)
-    with torch.no_grad():
-        logits = model(mag)
-        probs = torch.softmax(logits, dim=1).cpu().numpy().flatten()
-        for i, p in enumerate(probs):
-            print(f"{CLASS_LABELS[i]}: {p*100:.2f}%")
-        print("Prediction:", CLASS_LABELS[np.argmax(probs)])
+    if mag is None:
+        print(f"Failed to read or process '{file_path}'. Cannot make prediction.")
+        return
 
-# Example usage:
-# Make sure "Observation.txt" exists in your current directory for this to work
-# You can create a dummy file for testing:
-# with open("Observation.txt", "w") as f:
-#     f.write("Frequency\tMagnitude\tPhase\n")
-#     for i in range(100):
-#         f.write(f"{i}\t{np.random.rand()}\t{np.random.rand()}\n")
-predict_observation("Observation.txt")
+    if len(mag) < input_feature_size:
+        mag = np.pad(mag, (0, input_feature_size - len(mag)), 'constant')
+    elif len(mag) > input_feature_size:
+        mag = mag[:input_feature_size]
+
+    mag_reshaped = mag.reshape(1, -1)
+    mag_scaled = trained_scaler.transform(mag_reshaped)
+
+    if hasattr(trained_model, 'predict_proba'):
+        probabilities = trained_model.predict_proba(mag_scaled)[0]
+    else:
+        prediction_idx = trained_model.predict(mag_scaled)[0]
+        probabilities = np.zeros(len(class_labels))
+        probabilities[prediction_idx] = 1.0
+
+    print(f"\nPrediction for '{file_path}':")
+    for i, p in enumerate(probabilities):
+        print(f" {class_labels[i]}: {p*100:.2f}%")
+
+    predicted_label_idx = np.argmax(probabilities)
+    print(f"Final Prediction: {class_labels[predicted_label_idx]}")
+
+# ============ Example Usage ============
+print("\n--- Running Inference on 'Observation.txt' ---")
+if os.path.exists("Observation.txt"):
+    predict_observation("Observation.txt", model, scaler, input_size, CLASS_LABELS)
+else:
+    print("Observation.txt not found. Creating a dummy file for testing...")
+    with open("Observation.txt", "w") as f:
+        f.write("Frequency\tMagnitude\tPhase\n")
+        for i in range(input_size):
+            f.write(f"{i}\t{np.random.rand()}\t{np.random.rand()}\n")
+    print("Dummy file created. Running prediction...")
+    predict_observation("Observation.txt", model, scaler, input_size, CLASS_LABELS)
+
+print("\n--- Holes Model Training and Evaluation Complete ---")

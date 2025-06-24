@@ -1,82 +1,89 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.fft import fft, ifft
 
-# Define the target number of positive frequency points
-# This MUST match the FIXED_SIGNAL_LENGTH from your Model.py (which is 6402)
-TARGET_POSITIVE_FREQ_POINTS = 6402
+# ========== CONFIG ==========
+def generate_synthetic_data(num_rows=6403):
+    frequencies = np.linspace(0, 1000, num_rows)
 
-def generate_observation_spectrum():
-    """
-    Generates a single, smooth frequency spectrum for 'Observation.txt'
-    with characteristics designed for classification.
-    """
+    magnitudes = np.zeros(num_rows)
+    magnitudes += 5
 
-    max_freq_hz = 2000 # Your goal plot goes up to 2000 Hz
-    freqs_positive = np.linspace(0, max_freq_hz, TARGET_POSITIVE_FREQ_POINTS, endpoint=False)
+    # Refined parameters for synthetic peaks to better match the graph
+    # Peak 1 (more prominent and wider, starting around 50-100Hz)
+    amp1, freq1, width1 = 45, 100, 30
+    magnitudes += amp1 * np.exp(-((frequencies - freq1)**2) / (2 * width1**2))
 
-    # Initialize magnitude spectrum with a very low, smooth baseline
-    # Adjusted baseline for smoother appearance
-    magnitude_db = np.full(TARGET_POSITIVE_FREQ_POINTS, -40.0, dtype=np.float32)
+    # Peak 2 (around 200-250Hz)
+    amp2, freq2, width2 = 30, 250, 15
+    magnitudes += amp2 * np.exp(-((frequencies - freq2)**2) / (2 * width2**2))
 
-    # Define peak parameters for this generic observation.
-    # These are designed to be somewhat between 'Healthy' and 'Medium Damage'
-    # to provide a non-trivial classification target.
-    # (Center Frequency (Hz), Peak Magnitude (dB), Bandwidth/Spread (Hz) - increased for smoothness)
-    peaks_definition = [
-        (105, 32, 40),    # Broader peak than before
-        (310, 27, 45),    # Broader peak
-        (705, 38, 50),    # Very broad and prominent
-        (1105, 35, 55),   # Broader
-        (1505, 28, 60),   # Broader
-        (1905, 30, 65),   # Broader
-        (50, 15, 30)      # A new, relatively minor but broad low-freq component
-    ]
+    # Peak 3 (around 300-350Hz)
+    amp3, freq3, width3 = 55, 350, 20
+    magnitudes += amp3 * np.exp(-((frequencies - freq3)**2) / (2 * width3**2))
 
-    # Add Gaussian peaks to the magnitude spectrum
-    for freq_center, peak_magnitude_db, spread_hz in peaks_definition:
-        sigma = spread_hz / 3.5 # Slightly increased denominator for even broader peaks
+    # Peak 4 (around 500Hz)
+    amp4, freq4, width4 = 40, 500, 25
+    magnitudes += amp4 * np.exp(-((frequencies - freq4)**2) / (2 * width4**2))
 
-        gaussian_peak = peak_magnitude_db * np.exp(-0.5 * ((freqs_positive - freq_center) / sigma)**2)
-        magnitude_db = np.maximum(magnitude_db, gaussian_peak)
+    # Peak 5 (around 700Hz)
+    amp5, freq5, width5 = 30, 700, 20
+    magnitudes += amp5 * np.exp(-((frequencies - freq5)**2) / (2 * width5**2))
 
-    # Add very subtle random fluctuations for a natural look, significantly reduced
-    magnitude_db += np.random.normal(0, 0.2, TARGET_POSITIVE_FREQ_POINTS) # +/- 0.2 dB variation
+    # Peak 6 (around 900Hz, broader)
+    amp6, freq6, width6 = 28, 900, 40
+    magnitudes += amp6 * np.exp(-((frequencies - freq6)**2) / (2 * width6**2))
 
-    # Apply a gentle roll-off at higher frequencies, common in real-world systems
-    # This creates a slight downward slope towards the right of the spectrum.
-    roll_off_factor = np.linspace(1.0, 0.8, TARGET_POSITIVE_FREQ_POINTS) # Gradual decrease
-    magnitude_db = magnitude_db * roll_off_factor
+    magnitudes += 8 * np.sin(frequencies / 150)
+    magnitudes += np.random.normal(0, 1.2, num_rows)
+
+    magnitudes[magnitudes < 0] = 0.1
+
+    # Adjusted phase shifts for better resemblance
+    phases = np.interp(frequencies,
+                       [0, freq1, freq1 + width1, freq2, freq2 + width2,
+                        freq3, freq3 + width3, freq4, freq4 + width4,
+                        freq5, freq5 + width5, freq6, freq6 + width6, 1000],
+                       [0, -60, -120, -150, -220, -260, -330, -380, -450,
+                        -490, -560, -600, -670, -700])
+
+    phases += np.random.normal(0, 4, num_rows)
+
+    return frequencies, magnitudes, phases
+
+def save_to_file(filename, frequencies, magnitudes, phases):
+    with open(filename, 'w') as f:
+        f.write("Frequency\tMagnitude\tPhase\n")
+        for i in range(len(frequencies)):
+            f.write(f"{frequencies[i]:.4f}\t{magnitudes[i]:.4f}\t{phases[i]:.4f}\n")
+    print(f"Data saved to {filename}")
+    print(f"{len(frequencies)} Rows")
 
 
-    # Generate dummy phase data (model only uses magnitude)
-    phase_positive = np.random.uniform(-180, 180, TARGET_POSITIVE_FREQ_POINTS)
+# ========== Visuals ==========
+def plot_data(frequencies, magnitudes, phases):
+    plt.figure(figsize=(12, 6))
 
-    # Save results to file
-    df = pd.DataFrame({
-        "Frequency": freqs_positive,
-        "Magnitude": magnitude_db,
-        "Phase": phase_positive
-    })
-    filename = "Observation.txt"
-    df.to_csv(filename, sep="\t", index=False)
-    print(f"Analysis complete. Data saved to '{filename}' with {len(df)} frequency points.")
-
-    # Create visualization
-    plt.figure(figsize=(14, 7))
-    plt.plot(freqs_positive, magnitude_db, 'b-', linewidth=2, label="Magnitude (dB)")
-    plt.title(f"Frequency Spectrum Analysis: Simulated Observation", fontsize=16, fontweight='bold')
-    plt.xlabel("Frequency (Hz)", fontsize=12)
-    plt.ylabel("Magnitude (dB)", fontsize=12)
-    plt.grid(True, alpha=0.3)
-    plt.legend(fontsize=12)
-    plt.xlim(0, max_freq_hz)
-    plt.ylim(-40, 40) # Adjusted for the new baseline and peak amplitudes
+    plt.subplot(2, 1, 1)
+    plt.plot(frequencies, magnitudes, color='lightgreen')
+    plt.title('Synthetic Frequency Response (Magnitude)')
+    plt.xlabel('Frequency')
+    plt.ylabel('Magnitude')
+    plt.grid(True, linestyle='-', alpha=0.6)
     plt.tight_layout()
+
+    plt.subplot(2, 1, 2)
+    plt.plot(frequencies, phases, color='skyblue')
+    plt.title('Synthetic Frequency Response (Phase)')
+    plt.xlabel('Frequency')
+    plt.ylabel('Phase (degrees)')
+    plt.grid(True, linestyle='-', alpha=0.6)
+    plt.tight_layout()
+
     plt.show()
 
-    return df
-
 if __name__ == "__main__":
-    spectrum_data = generate_observation_spectrum()
+    freq, mag, pha = generate_synthetic_data()
+
+    save_to_file("Observation.txt", freq, mag, pha)
+
+    plot_data(freq, mag, pha)

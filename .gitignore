@@ -3,6 +3,8 @@ models/Leafs/data/*
 models/Pressure/data/*
 
 models/*/data/
+models/*/test/
+models/*/backup/
 
 *.pyc
 __pycache__/

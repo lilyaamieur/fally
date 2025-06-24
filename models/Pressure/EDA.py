@@ -1,60 +1,49 @@
-import os
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-from tqdm import tqdm  # For progress bars
+import os
+from tqdm import tqdm
 
 # ========== CONFIG ==========
 BASE_DIR = "./data"
-# UPDATED FOLDERS for the new dataset categories
 FOLDERS = ["healthy", "heavy_stress", "light_stress", "medium_stress", ""]
-N_SAMPLES = 3  # Number of samples to display per category
-MAX_FILES_TO_PROCESS = 100  # Safety limit for processing files per folder
-COLORS = ['#4CAF50', '#FFC107', '#FF9800', '#F44336']  # Material design colors
-sns.set(style="whitegrid", font_scale=0.8)  # Set seaborn style with proper scaling
+N_SAMPLES = 3
+MAX_FILES_TO_PROCESS = 100
+COLORS = ['#4CAF50', '#FFC107', '#FF9800', '#F4436']
+sns.set(style="whitegrid", font_scale=0.8)
 
 # ========== UTILS ==========
 def read_signal_file(filepath):
-    """Read signal file with robust header handling"""
     try:
-        # First try reading assuming the first row might be header, but read as data
-        # Then convert to numeric and drop non-numeric rows
         df = pd.read_csv(
             filepath,
             sep="\t",
             encoding="latin1",
-            header=None, # Treat everything as data initially
+            header=None,
             names=["Frequency", "Magnitude", "Phase"],
             on_bad_lines="skip"
         )
-
-        # Convert to numeric, coercing errors to NaN
         df = df.apply(pd.to_numeric, errors='coerce').dropna()
-
         if df.empty:
             raise ValueError("No valid numeric data found after parsing")
-            
         return df
-
     except Exception as e:
         print(f"\nError processing {os.path.basename(filepath)}: {str(e)}")
         return None
 
 def get_txt_files(folder):
-    """Get text files with size validation"""
     try:
         files = [f for f in sorted(os.listdir(folder))
                  if f.endswith(".txt")
                  and not f.startswith('.')
-                 and os.path.getsize(os.path.join(folder, f)) > 10]  # Minimum 10 bytes to avoid empty/corrupt files
-        return files[:MAX_FILES_TO_PROCESS] # Limit the number of files processed per folder
+                 and os.path.getsize(os.path.join(folder, f)) > 10]
+        return files[:MAX_FILES_TO_PROCESS]
     except Exception as e:
         print(f"\nError accessing {folder}: {str(e)}")
         return []
 
 def plot_signal(ax, x, y, title="", color='b', alpha=0.7):
-    """Standardized signal plotting"""
     ax.plot(x, y, color=color, alpha=alpha, linewidth=1.5)
     ax.set_title(title, fontsize=10, pad=5)
     ax.set_xlabel("Frequency (Hz)", fontsize=8)
@@ -64,11 +53,9 @@ def plot_signal(ax, x, y, title="", color='b', alpha=0.7):
 
 # ========== VISUALIZE INDIVIDUAL SAMPLES ==========
 def plot_individual_samples():
-    """Plot individual samples in a grid layout"""
-    # Adjust figsize based on the number of samples and folders if needed
     fig, axs = plt.subplots(
         len(FOLDERS), N_SAMPLES,
-        figsize=(18, 4 * len(FOLDERS)), # Dynamic height based on number of folders
+        figsize=(18, 4 * len(FOLDERS)),
         squeeze=False,
         constrained_layout=True
     )
@@ -77,7 +64,6 @@ def plot_individual_samples():
     for row, folder in enumerate(tqdm(FOLDERS, desc="Processing folders for individual plots")):
         folder_path = os.path.join(BASE_DIR, folder)
 
-        # Check if folder exists
         if not os.path.exists(folder_path):
             print(f"\nFolder '{folder_path}' not found, skipping...")
             for col in range(N_SAMPLES):
@@ -94,7 +80,6 @@ def plot_individual_samples():
                 axs[row, col].axis('off')
             continue
             
-        # Select N_SAMPLES files, or fewer if not enough exist
         files_to_plot = filenames[:N_SAMPLES]
 
         for col, fname in enumerate(files_to_plot):
@@ -106,14 +91,13 @@ def plot_individual_samples():
                     axs[row, col],
                     df["Frequency"],
                     df["Magnitude"],
-                    title=f"{folder}\n{os.path.basename(fname)}", # Use basename for cleaner title
-                    color=COLORS[row % len(COLORS)] # Use modulo for color safety
+                    title=f"{folder}\n{os.path.basename(fname)}",
+                    color=COLORS[row % len(COLORS)]
                 )
             else:
                 axs[row, col].set_title(f"{folder}\n{os.path.basename(fname)}\n(Data error)", fontsize=10, color='orange')
-                axs[row, col].axis('off')  # Hide empty/error subplots
+                axs[row, col].axis('off')
         
-        # Hide any remaining empty subplots if fewer than N_SAMPLES files were found
         for col_fill in range(len(files_to_plot), N_SAMPLES):
             axs[row, col_fill].axis('off')
 
@@ -121,7 +105,6 @@ def plot_individual_samples():
 
 # ========== OVERLAPPING PLOT (ONE SAMPLE PER CLASS) ==========
 def plot_sample_comparison():
-    """Plot one representative sample from each class"""
     plt.figure(figsize=(12, 7))
 
     for i, folder in enumerate(FOLDERS):
@@ -137,7 +120,7 @@ def plot_sample_comparison():
             print(f"\nNo valid .txt files found in {folder_path}, skipping sample comparison for {folder}...")
             continue
 
-        file_path = os.path.join(folder_path, files[0]) # Take the first valid file
+        file_path = os.path.join(folder_path, files[0])
         df = read_signal_file(file_path)
 
         if df is not None and not df.empty:
@@ -145,7 +128,7 @@ def plot_sample_comparison():
                 df["Frequency"],
                 df["Magnitude"],
                 label=folder,
-                color=COLORS[i % len(COLORS)], # Use modulo for color safety
+                color=COLORS[i % len(COLORS)],
                 alpha=0.8,
                 linewidth=2
             )
@@ -162,7 +145,6 @@ def plot_sample_comparison():
 
 # ========== AVERAGED PLOT (ALL FILES PER CLASS) ==========
 def plot_average_curves():
-    """Plot averaged signals for each class with standard deviation fill"""
     plt.figure(figsize=(12, 7))
 
     for i, folder in enumerate(tqdm(FOLDERS, desc="Averaging signals")):
@@ -184,12 +166,9 @@ def plot_average_curves():
             print(f"\nNo valid data in {folder_path} for averaging, skipping...")
             continue
 
-        # Align all signals to the same frequency range based on the minimum length
-        # This handles cases where files might have different numbers of rows.
-        # It's crucial for correct averaging.
         min_len = min(len(df) for df in valid_dfs)
         aligned_mags = np.array([df["Magnitude"].values[:min_len] for df in valid_dfs])
-        freqs = valid_dfs[0]["Frequency"].values[:min_len] # Assume frequencies are consistent up to min_len
+        freqs = valid_dfs[0]["Frequency"].values[:min_len]
 
         avg_mag = np.mean(aligned_mags, axis=0)
         std_mag = np.std(aligned_mags, axis=0)
@@ -215,11 +194,9 @@ def plot_average_curves():
 if __name__ == "__main__":
     print("Starting signal EDA for bearing, misalignment, normal, and unbalance conditions...")
 
-    # Validate BASE_DIR exists
     if not os.path.exists(BASE_DIR):
         print(f"Error: BASE_DIR '{BASE_DIR}' does not exist. Please create it and place your data folders inside.")
     else:
-        # Check if any of the expected folders exist
         found_any_folder = False
         for folder in FOLDERS:
             if os.path.exists(os.path.join(BASE_DIR, folder)):
@@ -238,4 +215,3 @@ if __name__ == "__main__":
         print(f"\nAn error occurred during EDA: {str(e)}")
     finally:
         print("EDA complete.")
-
