@@ -8,6 +8,10 @@ class InteractiveMapPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Interactive Map'),
+        centerTitle: true,
+      ),
       body: Center(
         child: InteractiveViewer(
           maxScale: 5.0,
@@ -16,7 +20,7 @@ class InteractiveMapPage extends StatelessWidget {
           child: Stack(
             children: [
               // Map background with full size
-              Image.asset('assets/images/map.png'),
+              Image.asset('assets/images/map.jpg'),
 
               // Tree icons overlaid using absolute positioning inside same coordinate system
               ..._trees.map((tree) {
@@ -121,7 +125,7 @@ class _ClickableTreeIconState extends State<ClickableTreeIcon> {
           duration: Duration(milliseconds: 150),
           child: FaIcon(
             FontAwesomeIcons.tree,
-            size: 10,
+            size: 8,
             color: _isHovered ? Colors.lightGreen : Colors.green,
           ),
         ),

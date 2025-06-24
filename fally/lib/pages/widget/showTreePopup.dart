@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../tree/data.dart'; // Adjust the import based on your project structure
-import './tree_assessement.dart';
+
 void showTreePopup(BuildContext context, TreeData tree) {
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text('Tree #${tree.number}'),
+      title: Text('Tree ${tree.number}'),
       content: Text(tree.description),
       actions: [
         TextButton(
@@ -17,11 +17,9 @@ void showTreePopup(BuildContext context, TreeData tree) {
         ),
         TextButton(
           onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => BranchAssessmentPage(),
-              ),
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Input data for Tree ${tree.number}')),
             );
           },
           child: Text('Input Data'),
