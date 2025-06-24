@@ -1,24 +1,37 @@
 name: fally
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: 'none' # Prevents accidental publishing
 version: 0.1.0
 
 environment:
-  sdk: ^3.8.1
+  sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
+
+  # Augmented Reality Plugins
   ar_flutter_plugin: ^0.7.3
   arkit_plugin: ^1.1.2
-  vector_math: ^2.1.4
-  
+  flutter_map: ^6.1.0
+  font_awesome_flutter: ^10.7.0
+  google_maps_flutter: ^2.5.3
 
+  # Math Support
+  vector_math: ^2.1.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^3.0.0 # Use ^3.0.0 or adjust based on compatibility
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/forest_illustration.jpg
+    - assets/images/logo.png
+    - assets/images/map.png
+    - assets/images/mapd.png
+
+
