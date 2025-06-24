@@ -10,7 +10,7 @@ from PIL import Image # Import Image for predict_image function
 
 # ============ CONFIG ============
 # IMPORTANT: Ensure DATA_DIR contains subfolders like 'Normal', 'Mn_Insufficient', etc.
-DATA_DIR = "./"
+DATA_DIR = "./data"
 BATCH_SIZE = 32
 EPOCHS = 20 # Increased epochs for better multi-class learning, adjust as needed
 LR = 1e-4

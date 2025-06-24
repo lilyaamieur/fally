@@ -6,9 +6,9 @@ import seaborn as sns
 from tqdm import tqdm  # For progress bars
 
 # ========== CONFIG ==========
-BASE_DIR = "./"
+BASE_DIR = "./data"
 # UPDATED FOLDERS for the new dataset categories
-FOLDERS = ["bearing", "misalignment", "normal", "unbalance"]
+FOLDERS = ["healthy", "heavy_stress", "light_stress", "medium_stress", ""]
 N_SAMPLES = 3  # Number of samples to display per category
 MAX_FILES_TO_PROCESS = 100  # Safety limit for processing files per folder
 COLORS = ['#4CAF50', '#FFC107', '#FF9800', '#F44336']  # Material design colors

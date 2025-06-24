@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 # =========================
 # 1. CONFIG
 # =========================
-BASE_DIR = "./"
+BASE_DIR = "./data"
 FOLDERS = ["Healthy", "Light Damage", "Medium Damage", "Severe Damage"]
 CLASS_LABELS = ["Healthy", "Light", "Medium", "Severe"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
