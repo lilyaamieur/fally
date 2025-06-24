@@ -10,7 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   # Augmented Reality Plugins
-  ar_flutter_plugin: ^0.7.3
   arkit_plugin: ^1.1.2
   flutter_map: ^6.1.0
   image_picker: ^1.0.7
@@ -33,5 +32,19 @@ flutter:
     - assets/images/logo.png
     - assets/images/map.jpg
     - assets/images/mapd.jpg
+
+  fonts:
+    - family: Quicksand
+      fonts:
+        - asset: assets/fonts/Quicksand-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Quicksand-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Quicksand-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Quicksand-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Quicksand-Bold.ttf
+          weight: 700
 
 

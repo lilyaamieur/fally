@@ -2,25 +2,16 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import '../report/alert.dart';
 
-
-
 class ToolsPage extends StatelessWidget {
   const ToolsPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expert Tools'),
-      ),
-      body: ListView(
-        children: const [
-          
-        ],
-      ),
+      appBar: AppBar(title: const Text('Expert Tools')),
+      body: ListView(children: const []),
       floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.build,
-        ),
+        child: const Icon(Icons.build),
         onPressed: () {
           showModalBottomSheet(
             context: context,
@@ -40,10 +31,7 @@ class ToolSelector extends StatelessWidget {
     return Wrap(
       children: [
         ListTile(
-          leading: const Icon(Icons.straighten,
-          color: Colors.green,
-
-          ),
+          leading: const Icon(Icons.straighten, color: Colors.green),
           title: const Text('Measurement Tool'),
           onTap: () {
             Navigator.pop(context);
@@ -54,10 +42,7 @@ class ToolSelector extends StatelessWidget {
           },
         ),
         ListTile(
-          leading: const Icon(Icons.rotate_90_degrees_ccw,
-                    color: Colors.green,
-
-          ),
+          leading: const Icon(Icons.rotate_90_degrees_ccw, color: Colors.green),
           title: const Text('Angle Verification'),
           onTap: () {
             Navigator.pop(context);
@@ -67,11 +52,8 @@ class ToolSelector extends StatelessWidget {
             );
           },
         ),
-        ListTile(
-          leading: const Icon(Icons.calculate,
-                    color: Colors.green,
-
-          ),
+        /*ListTile(
+          leading: const Icon(Icons.calculate, color: Colors.green),
           title: const Text('Expert Calculator'),
           onTap: () {
             Navigator.pop(context);
@@ -80,7 +62,7 @@ class ToolSelector extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const ExpertCalculator()),
             );
           },
-        ),
+        ),*/
         ListTile(
           leading: const Icon(Icons.warning, color: Colors.red),
           title: const Text('Report Issue'),
@@ -156,7 +138,8 @@ class _AngleVerificationToolState extends State<AngleVerificationTool> {
   void calculateAngle() {
     if (sideA != null && sideB != null && sideC != null) {
       // Law of Cosines: cos(C) = (a² + b² - c²) / (2ab)
-      double cosC = ((sideA! * sideA!) + (sideB! * sideB!) - (sideC! * sideC!)) /
+      double cosC =
+          ((sideA! * sideA!) + (sideB! * sideB!) - (sideC! * sideC!)) /
           (2 * sideA! * sideB!);
       angle = acos(cosC) * 180 / pi;
     }
@@ -170,9 +153,7 @@ class _AngleVerificationToolState extends State<AngleVerificationTool> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text(
-              "finding a difficulty to measure ?",
-            ),
+            Text("finding a difficulty to measure ?"),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
@@ -208,8 +189,6 @@ class _AngleVerificationToolState extends State<AngleVerificationTool> {
             const SizedBox(height: 10),
             if (angle != null && !angle!.isNaN)
               Text('Angle (°): ${angle!.toStringAsFixed(2)}'),
-            
-
 
             const SizedBox(height: 50),
             Text(
@@ -224,7 +203,6 @@ class _AngleVerificationToolState extends State<AngleVerificationTool> {
               },
               child: const Text('Open Camera'),
             ),
-
           ],
         ),
       ),
@@ -232,6 +210,7 @@ class _AngleVerificationToolState extends State<AngleVerificationTool> {
   }
 }
 
+/*
 class ExpertCalculator extends StatefulWidget {
   const ExpertCalculator({Key? key}) : super(key: key);
 
@@ -304,3 +283,4 @@ class _ExpertCalculatorState extends State<ExpertCalculator> {
   }
 }
 
+*/
