@@ -1,5 +1,7 @@
+// file: report_issue_page.dart
+
 import 'package:flutter/material.dart';
-import '../data/alerts_data.dart'; // Replace with actual path
+import '../data/alerts_data.dart';
 
 class ReportIssuePage extends StatefulWidget {
   const ReportIssuePage({Key? key}) : super(key: key);
@@ -11,28 +13,19 @@ class ReportIssuePage extends StatefulWidget {
 class _ReportIssuePageState extends State<ReportIssuePage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subtitleController = TextEditingController();
-  final TextEditingController _treeNumberController = TextEditingController();
 
   void _submitAlert() {
     final title = _titleController.text.trim();
     final subtitle = _subtitleController.text.trim();
-    final treeNumber = _treeNumberController.text.trim();
 
-    if (title.isEmpty || subtitle.isEmpty || treeNumber.isEmpty) {
+    if (title.isEmpty || subtitle.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        const SnackBar(content: Text('Please fill in both fields')),
       );
       return;
     }
 
-    final now = DateTime.now().toIso8601String().split('T').first;
-
-    alertData.insert(0, {
-      'title': title,
-      'subtitle': subtitle,
-      'date': now,
-      'treeNumber': treeNumber,
-    });
+    NewsService.addAlert(title: title, subtitle: subtitle);
 
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -64,15 +57,6 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
               ),
               maxLines: 3,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _treeNumberController,
-              decoration: const InputDecoration(
-                labelText: 'Tree Number',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               icon: const Icon(Icons.send),
@@ -86,5 +70,21 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
         ),
       ),
     );
+  }
+}
+
+// lib/services/news_service.dart
+class NewsService {
+  static void addAlert({
+    required String title,
+    required String subtitle,
+    String? date,
+  }) {
+    final now = date ?? DateTime.now().toIso8601String().split('T').first;
+    alertData.insert(0, {
+      'title': title,
+      'subtitle': subtitle,
+      'date': now,
+    });
   }
 }
