@@ -1,0 +1,12 @@
+models/Holes/data/*
+models/Leafs/data/*
+models/Pressure/data/*
+
+models/*/data/
+
+*.pyc
+__pycache__/
+.DS_Store
+.vscode/
+.idea/
+*.log
